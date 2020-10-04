@@ -1,0 +1,6 @@
+How do you connect two ellipses?
+    If you choose a point on A, it has a corresponding point on B (where velocities match) 4 point interpolation
+    Could we make more ellipses arise from the path? 
+    How do we select the first point on A?
+    How do we decide where to place the ellipses?
+    The path to the 3rd ellipse cannot cross the path between A and B
