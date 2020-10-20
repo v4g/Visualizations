@@ -29,7 +29,7 @@ module.exports = {
   },
   optimization: {
     moduleIds: 'hashed',
-    minimize: true,
+    minimize: false,
     runtimeChunk: 'single',
     splitChunks: {
       cacheGroups: {
