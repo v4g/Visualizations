@@ -11,25 +11,34 @@ function draw() {
 
 function myscene() {
     const ellipse1 = new Ellipse(60, 50, 80, 80);
-    const ellipse2 = new Ellipse(50, 40, 230, 80, true);
-    const vel = findVelocityAtAngle(ellipse1, Math.PI/2);
-    console.log(vel);
+    const ellipse2 = new Ellipse(50, 40, 210, 80, true);
+    const ellipse3 = new Ellipse(100, 60, 290, 300);
+    createCurveBetweenTwoEllipses(ellipse1, ellipse2, Math.PI / 2);
+    createCurveBetweenTwoEllipses(ellipse2, ellipse3, 0);
+    }
+
+function createCurveBetweenTwoEllipses(ellipse1, ellipse2, angle) {
+    const vel = findVelocityAtAngle(ellipse1, angle);
     const normalized_vel = glMatrix.vec2.create();
     glMatrix.vec2.normalize(normalized_vel, vel);
-    const obj = findPointWithVelocity(ellipse2, normalized_vel);
-    console.log(obj);
-    const point = pointOnEllipse(ellipse1, Math.PI / 2);
-    preprocess(ellipse1, vel);
-    preprocess(ellipse2, obj.velocity);
+    const obj1 = findPointWithVelocity(ellipse2, normalized_vel);
+    const point = pointOnEllipse(ellipse1, angle);
+    preprocess(ellipse1, vel, point);
+    preprocess(ellipse2, obj1.velocity, obj1.point);
     ellipse(ellipse1.x, ellipse1.y, 2 * ellipse1.a, 2 * ellipse1.b);
     ellipse(ellipse2.x, ellipse2.y, 2 * ellipse2.a, 2 * ellipse2.b);
-    createCurve(point, vel, obj.point, obj.velocity);
+    createCurve(point, vel, obj1.point, obj1.velocity);
 }
 
-function preprocess(ellipse, vel) {
+function preprocess(ellipse, vel, point) {
     // I have no idea why this works.. Why 3??
     // It just does
-    const ext = ellipse.a / ellipse.b * 3;
+    let dist = glMatrix.vec2.fromValues(point[0]-ellipse.x, point[1]-ellipse.y);
+    dist = glMatrix.vec2.len(dist);
+    // the shorter the axis this is on, the more scaling needed
+    const eccentricity =  Math.max(ellipse.a, ellipse.b) / Math.min(ellipse.a, ellipse.b);
+    const ext = 3 *  Math.max(ellipse.a, ellipse.b) / dist;
+    console.log(ext);
     vel[0] *= ext;
     vel[1] *= ext;
 }
@@ -37,7 +46,6 @@ function preprocess(ellipse, vel) {
 function createCurve(p1, v1, p2, v2) {
     
     curve_points = hermite(p1, v1, p2, v2, 200);
-    console.log(curve_points);
     stroke(0);
     noFill();
     beginShape();
@@ -54,7 +62,6 @@ function Object2D() {
     this._scale = glMatrix.vec2.create();
     glMatrix.vec2.set(this._scale, 1, 1);
     this._translate = glMatrix.vec2.create();
-    console.log(this.matrix);
     Object.defineProperty(this, "rotate", {
         get() {
             return this._rotate;
@@ -157,6 +164,9 @@ function findPointWithVelocity(ellipse, velocity) {
     vec[1] = b * vec[1];
     vel[0] = -a * vec[1] / b;
     vel[1] = b * vec[0] / a;
+    if (!ellipse.ccw) {
+        glMatrix.vec2.negate(vel, vel);
+    }
     vec = glMatrix.vec2.transformMat2d(vec, vec, ellipse.obj.matrix);
     return {point: vec, velocity: vel};
 }
@@ -185,7 +195,6 @@ function pointOnEllipse(ellipse, angle) {
     let point = [x, y];
     let matrix = ellipse.obj.matrix;
     glMatrix.vec2.transformMat2d(point, point, ellipse.obj.matrix);
-    console.log(point);
     return point;
 }
 
@@ -215,7 +224,7 @@ function hermite_at(p1, v1, p2, v2, u, mat) {
     glMatrix.vec4.transformMat4(vec, vec, mat);
     const vel = glMatrix.vec4.fromValues(0, 1, 2*u, 3*u*u);
     glMatrix.vec4.transformMat4(vel, vel, mat);
-    console.log("at u", u, vel);
+    // console.log("at u", u, vel);
     return vec;
 }
 // returns the matrix for the hermite curve from p1 to p2
