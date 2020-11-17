@@ -1,28 +1,51 @@
 
 function setup() {
     createCanvas(500, 500);
-    console.log(glMatrix);
-    const ellipse = new Ellipse(50, 50, 80, 80);
-    console.log(ellipse);
-    const obj = findPointWithVelocity(ellipse, [1, 0]);
-    console.log(obj);
+    noLoop();    
 }
 
 function draw() {
     background(220);
-    ellipse(50, 50, 80, 80);
-    createCurve({ x: 50, y: 50 }, { x: 10, y: 10 }, { x: 90, y: 50 }, { x: 10, y: 10 });
+    myscene()
 }
 
 function myscene() {
+    const ellipse1 = new Ellipse(60, 50, 80, 80);
+    const ellipse2 = new Ellipse(50, 40, 230, 80, true);
+    const vel = findVelocityAtAngle(ellipse1, Math.PI/2);
+    console.log(vel);
+    const normalized_vel = glMatrix.vec2.create();
+    glMatrix.vec2.normalize(normalized_vel, vel);
+    const obj = findPointWithVelocity(ellipse2, normalized_vel);
+    console.log(obj);
+    const point = pointOnEllipse(ellipse1, Math.PI / 2);
+    preprocess(ellipse1, vel);
+    preprocess(ellipse2, obj.velocity);
+    ellipse(ellipse1.x, ellipse1.y, 2 * ellipse1.a, 2 * ellipse1.b);
+    ellipse(ellipse2.x, ellipse2.y, 2 * ellipse2.a, 2 * ellipse2.b);
+    createCurve(point, vel, obj.point, obj.velocity);
+}
 
+function preprocess(ellipse, vel) {
+    // I have no idea why this works.. Why 3??
+    // It just does
+    const ext = ellipse.a / ellipse.b * 3;
+    vel[0] *= ext;
+    vel[1] *= ext;
 }
 
 function createCurve(p1, v1, p2, v2) {
-    let p3 = { x: p1.x + v1.x, y: p1.y + v1.y };
-    let p4 = { x: p2.x + v2.x, y: p2.y + v2.y };
+    
+    curve_points = hermite(p1, v1, p2, v2, 200);
+    console.log(curve_points);
     stroke(0);
-    curve(p1.x, p1.y, p3.x, p3.y, p2.x, p2.y, p4.x, p4.y);
+    noFill();
+    beginShape();
+    for (let i = 0 ; i < curve_points.length; i++) {
+        vertex(curve_points[i][0], curve_points[i][1]);
+    }
+    endShape();
+    // curve(p1[0], p1[1], p3[0], p3[1], p2[0], p2[1], p4[0], p4[1]);
 }
 function Object2D() {
 
@@ -41,6 +64,7 @@ function Object2D() {
             this.updateMatrix();
         }
     });
+
     this.updateMatrix = function () {
         this.matrix = glMatrix.mat2d.fromRotation(this.matrix, this._rotate);
         const mat = glMatrix.mat2d.fromTranslation(glMatrix.mat2d.create(), this._translate);
@@ -119,103 +143,96 @@ function findPointWithVelocity(ellipse, velocity) {
     let matrix = glMatrix.mat2d.create();
     glMatrix.mat2d.invert(matrix, ellipse.obj.matrix);
     let vel = glMatrix.vec2.transformMat2(glMatrix.vec2.create(), velocity, matrix);
-    if (ellipse.ccw) {
-        vel.negate();
+    if (!ellipse.ccw) {
+        glMatrix.vec2.negate(vel, vel);
     }
     const a = ellipse.a;
     const b = ellipse.b;
     const sintheta = -vel[0] / a;
     const costheta = vel[1] / b;
     let vec = [costheta, sintheta];
+    // normalize so that it actually becomes valid sin and cos thetas
     glMatrix.vec2.normalize(vec, vec);
     vec[0] = a * vec[0];
     vec[1] = b * vec[1];
+    vel[0] = -a * vec[1] / b;
+    vel[1] = b * vec[0] / a;
     vec = glMatrix.vec2.transformMat2d(vec, vec, ellipse.obj.matrix);
-    return vec;
-    // if (vel.y === 0) {
-    //     theta = vel.x > 0 ? -Math.PI / 2 : Math.PI / 2;
-    // } else {
-    //     theta = vel.x / vel.y * b / a;
-    //     theta = Math.atan2(theta, 1);
-    // }
-    // let point = new Two.Vector();
-    // point.set(a * Math.cos(theta), b * Math.sin(theta));
-    // point = matrixMultiplyPoint(matrixForEllipse(ellipse), point);
-    // return point;
+    return {point: vec, velocity: vel};
 }
 
-// function findVelocityAtAngle(ellipse, angle) {
-//     let a = ellipse.width / 2;
-//     let b = ellipse.height / 2;
+function findVelocityAtAngle(ellipse, angle) {
+    let a = ellipse.a;
+    let b = ellipse.b;
 
-//     let x = a * Math.cos(angle);
-//     let y = b * Math.sin(angle);
+    let x = a * Math.cos(angle);
+    let y = b * Math.sin(angle);
 
-//     let dx = -a * Math.sin(angle);
-//     let dy = b * Math.cos(angle);
-//     let vel = new Two.Vector(dx, dy);
-//     vel.normalize();
-//     if (ellipse.ccw) {
-//         vel.negate();
-//     }
-//     vel = matrixMultiplyVector(matrixForEllipse(ellipse), vel);
-//     return vel;
-//     // let tantheta = Infinity;
+    let dx = -a * Math.sin(angle);
+    let dy = b * Math.cos(angle);
+    let vel = [dx, dy];
+    // glMatrix.vec2.normalize(vel, vel);
+    if (!ellipse.ccw) {
+        glMatrix.vec2.negate(vel, vel);
+    }
+    glMatrix.vec2.transformMat2(vel, vel, ellipse.obj.matrix);
+    return vel;
+}
 
-//     // if (y == 0) {
-//     //     tantheta = Number.POSITIVE_INFINITY;
-//     // } else {
-//     //     tantheta = x / y * b * b / (a * a);
+function pointOnEllipse(ellipse, angle) {
+    let x = Math.cos(angle) * ellipse.a;
+    let y = Math.sin(angle) * ellipse.b;
+    let point = [x, y];
+    let matrix = ellipse.obj.matrix;
+    glMatrix.vec2.transformMat2d(point, point, ellipse.obj.matrix);
+    console.log(point);
+    return point;
+}
 
-//     // }
-//     // if (ellipse.ccw) {
-//     //     tantheta = -tantheta;
-//     // }
-//     // vel = new Two.Vector(1, tantheta);
+// returns the points of hermite curve from p1 to p2
+// with velocity v1 and v2 in an array
 
-//     // //have to do this because this thing can't handle infinities
-//     // if (tantheta == Number.POSITIVE_INFINITY) {
-//     //     vel = new Two.Vector(0, 1);
-//     // } else if (tantheta == Number.NEGATIVE_INFINITY) {
-//     //     vel = new Two.Vector(0, -1);
-//     // }
-//     // vel.normalize();
-//     // vel = matrixMultiplyVector(matrixForEllipse(ellipse), vel);
-//     // return vel;
-// }
+function hermite(p1, v1, p2, v2, n, mat) {
+    if (!n) {
+        n = 10;
+    }
+    if (!mat) {
+        mat = hermite_matrix(p1, v1, p2, v2);
+    }
+    let points = new Array(n+1);
+    for (let i=0; i <= n; i++) {
+        points[i] = hermite_at(p1, v1, p2, v2, i/n, mat);
+    }    
+    return points;
+}
+// gets the point on a hermite curve from p1 to p2
+// with velocity v1 and v2 at u
+function hermite_at(p1, v1, p2, v2, u, mat) {
+    if (!mat) {
+        mat = hermite_matrix(p1, v1, p2, v2);
+    }
+    const vec = glMatrix.vec4.fromValues(1, u, u*u, u*u*u);
+    glMatrix.vec4.transformMat4(vec, vec, mat);
+    const vel = glMatrix.vec4.fromValues(0, 1, 2*u, 3*u*u);
+    glMatrix.vec4.transformMat4(vel, vel, mat);
+    console.log("at u", u, vel);
+    return vec;
+}
+// returns the matrix for the hermite curve from p1 to p2
+// with velocity v1 and v2
+function hermite_matrix(p1, v1, p2, v2) {
+    // column major hermite matrix
+    const mat = glMatrix.mat4.fromValues(1, 0 ,0 ,0,
+        0, 0, 1, 0,
+        -3, 3, -2, -1,
+        2, -2, 1, 1);
 
-// function pointOnEllipse(ellipse, angle) {
-//     let x = Math.cos(angle) * ellipse.width / 2;
-//     let y = Math.sin(angle) * ellipse.height / 2;
-//     let point = new Two.Vector(x, y);
-//     let matrix = new Two.Matrix();
-//     matrix.rotate(ellipse.rotation);
-//     matrix.translate(ellipse.translation.x, ellipse.translation.y);
-//     point = matrixMultiplyPoint(matrix, point);
-//     console.log(point);
-//     return point;
-// }
+    // using a 4x4 matrix here because a 2x4 isn't supported
+    const point_matrix = glMatrix.mat4.fromValues(p1[0], p1[1], 0, 0,
+        p2[0], p2[1], 0, 0,
+        v1[0], v1[1], 0, 0,
+        v2[0], v2[1], 0, 0);
 
-// function matrixForEllipse(ellipse) {
-//     let matrix = new Two.Matrix();
-//     matrix.rotate(ellipse.rotation);
-//     matrix.translate(ellipse.translation.x, ellipse.translation.y);
-//     return matrix;
-// }
-
-// // Matrix multiply cuz two doesn't have it?????
-// function matrixMultiplyPoint(matrix, point) {
-//     const m = matrix.elements;
-//     let x = point.x * m[0] + point.y * m[1] + m[2];
-//     let y = point.x * m[3] + point.y * m[4] + m[5];
-//     let result = new Two.Vector(x, y);
-//     return result;
-// }
-// function matrixMultiplyVector(matrix, vec) {
-//     const m = matrix.elements;
-//     let x = vec.x * m[0] + vec.y * m[1];
-//     let y = vec.x * m[3] + vec.y * m[4];
-//     let point = new Two.Vector(x, y);
-//     return point;
-// }
-
+    glMatrix.mat4.multiply(mat, point_matrix, mat);
+    return mat;
+}
