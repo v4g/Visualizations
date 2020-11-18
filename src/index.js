@@ -16,8 +16,7 @@ function myscene() {
     ellipse3.obj.rotate = Math.PI/3;
     ellipse1.draw();
     ellipse2.draw();
-    // ellipse(ellipse1.x, ellipse1.y, 2 * ellipse1.a, 2 * ellipse1.b);
-    // ellipse3.draw();
+    ellipse3.draw();
     createCurveBetweenTwoEllipses(ellipse1, ellipse2, Math.PI / 2);
     createCurveBetweenTwoEllipses(ellipse2, ellipse3, 0);
     }
@@ -178,6 +177,7 @@ function findPointWithVelocity(ellipse, velocity) {
         glMatrix.vec2.negate(vel, vel);
     }
     vec = glMatrix.vec2.transformMat2d(vec, vec, ellipse.obj.matrix);
+    vel = glMatrix.vec2.transformMat2(vel, vel, ellipse.obj.matrix);
     return {point: vec, velocity: vel};
 }
 
