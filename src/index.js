@@ -13,6 +13,11 @@ function myscene() {
     const ellipse1 = new Ellipse(60, 50, 80, 80);
     const ellipse2 = new Ellipse(50, 40, 210, 80, true);
     const ellipse3 = new Ellipse(100, 60, 290, 300);
+    ellipse3.obj.rotate = Math.PI/3;
+    ellipse1.draw();
+    ellipse2.draw();
+    // ellipse(ellipse1.x, ellipse1.y, 2 * ellipse1.a, 2 * ellipse1.b);
+    // ellipse3.draw();
     createCurveBetweenTwoEllipses(ellipse1, ellipse2, Math.PI / 2);
     createCurveBetweenTwoEllipses(ellipse2, ellipse3, 0);
     }
@@ -25,8 +30,6 @@ function createCurveBetweenTwoEllipses(ellipse1, ellipse2, angle) {
     const point = pointOnEllipse(ellipse1, angle);
     preprocess(ellipse1, vel, point);
     preprocess(ellipse2, obj1.velocity, obj1.point);
-    ellipse(ellipse1.x, ellipse1.y, 2 * ellipse1.a, 2 * ellipse1.b);
-    ellipse(ellipse2.x, ellipse2.y, 2 * ellipse2.a, 2 * ellipse2.b);
     createCurve(point, vel, obj1.point, obj1.velocity);
 }
 
@@ -120,6 +123,13 @@ function Ellipse(a, b, x, y, ccw) {
     this.obj = new Object2D();
     this.obj.translate = [x, y];
     this.ccw = ccw ? ccw : false;
+
+    this.draw = function() {
+        const m = this.obj.matrix;
+        applyMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
+        ellipse(0, 0, 2 * this.a, 2 * this.b);
+        resetMatrix();        
+    }
 }
 
 // // select a random point on the ellipse and draw another circle
