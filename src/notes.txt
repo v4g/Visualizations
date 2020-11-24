@@ -4,3 +4,6 @@ How do you connect two ellipses?
     How do we select the first point on A?
     How do we decide where to place the ellipses?
     The path to the 3rd ellipse cannot cross the path between A and B
+
+Change ellipses into spirals (parameter u - {0,1}, takes a,b from 0,0 to a,b, and theta, number of rotations = r 
+                theta = u * r * 2PI)

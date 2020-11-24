@@ -1,25 +1,40 @@
-
+var spiral1, spiral2;
 function setup() {
     createCanvas(500, 500);
-    noLoop();    
+    // noLoop();
+    myscene_spiral()
 }
 
 function draw() {
     background(220);
-    myscene()
+    draw_myscene();
 }
 
+function draw_myscene() {
+    spiral2.obj.rotate = spiral2.obj.rotate + 0.01;
+    spiral1.obj.rotate = spiral1.obj.rotate + 0.01;
+    spiral1.draw();
+    spiral2.draw();
+    const p = interpolate_spirals(spiral1, [1, 1.1], spiral2, [1.1, 1], 100);
+    draw_curve(p);
+}
 function myscene() {
-    const ellipse1 = new Ellipse(60, 50, 80, 80);
-    const ellipse2 = new Ellipse(50, 40, 210, 80, true);
+    const ellipse1 = new Spiral(60, 50, 80, 80, 5, false);
+    const ellipse2 = new Spiral(50, 40, 210, 80, 5, true);
     const ellipse3 = new Ellipse(100, 60, 290, 300);
-    ellipse3.obj.rotate = Math.PI/3;
+    ellipse3.obj.rotate = Math.PI / 3;
     ellipse1.draw();
     ellipse2.draw();
     ellipse3.draw();
-    createCurveBetweenTwoEllipses(ellipse1, ellipse2, Math.PI / 2);
+    createCurveBetweenTwoSpirals(ellipse1, ellipse2, Math.PI / 2);
     createCurveBetweenTwoEllipses(ellipse2, ellipse3, 0);
-    }
+}
+function myscene_spiral() {
+    spiral1 = new ExpSpiral(60, 80, 80, 5, true);
+    spiral2 = new ExpSpiral(50, 210, 80, 5, true);
+    spiral1.draw();
+    spiral2.draw();
+}
 
 function createCurveBetweenTwoEllipses(ellipse1, ellipse2, angle) {
     const vel = findVelocityAtAngle(ellipse1, angle);
@@ -31,27 +46,48 @@ function createCurveBetweenTwoEllipses(ellipse1, ellipse2, angle) {
     preprocess(ellipse2, obj1.velocity, obj1.point);
     createCurve(point, vel, obj1.point, obj1.velocity);
 }
+function createCurveBetweenTwoSpirals(spiral1, spiral2, angle) {
+    const vel = spiral1.velocityAtAngle(angle);
+    const normalized_vel = glMatrix.vec2.create();
+    glMatrix.vec2.normalize(normalized_vel, vel);
+    const obj1 = spiral2.findPointWithVelocity(normalized_vel);
+    const point = spiral1.at(spiral1.uFromTheta(angle));
+    preprocess(spiral1, vel, point);
+    preprocess(spiral2, obj1.velocity, obj1.point);
+    createCurve(point, vel, obj1.point, obj1.velocity);
+}
 
 function preprocess(ellipse, vel, point) {
     // I have no idea why this works.. Why 3??
     // It just does
-    let dist = glMatrix.vec2.fromValues(point[0]-ellipse.x, point[1]-ellipse.y);
+    let dist = glMatrix.vec2.fromValues(point[0] - ellipse.x, point[1] - ellipse.y);
     dist = glMatrix.vec2.len(dist);
     // the shorter the axis this is on, the more scaling needed
-    const eccentricity =  Math.max(ellipse.a, ellipse.b) / Math.min(ellipse.a, ellipse.b);
-    const ext = 3 *  Math.max(ellipse.a, ellipse.b) / dist;
+    const eccentricity = Math.max(ellipse.a, ellipse.b) / Math.min(ellipse.a, ellipse.b);
+    const ext = 3 * Math.max(ellipse.a, ellipse.b) / dist;
     console.log(ext);
     vel[0] *= ext;
     vel[1] *= ext;
 }
 
+// Draws a curve given a bunch of points
+function draw_curve(curve_points) {
+    stroke(0);
+    noFill();
+    beginShape();
+    for (let i = 0; i < curve_points.length; i++) {
+        vertex(curve_points[i][0], curve_points[i][1]);
+    }
+    endShape();
+}
+
 function createCurve(p1, v1, p2, v2) {
-    
+
     curve_points = hermite(p1, v1, p2, v2, 200);
     stroke(0);
     noFill();
     beginShape();
-    for (let i = 0 ; i < curve_points.length; i++) {
+    for (let i = 0; i < curve_points.length; i++) {
         vertex(curve_points[i][0], curve_points[i][1]);
     }
     endShape();
@@ -114,6 +150,248 @@ function Object2D() {
     });
 }
 
+function fx(x) {
+    const res = (1 + Math.sin((-Math.PI / 2) + (x * Math.PI))) / 2; 
+    return res;
+} 
+// interpolates the spiral curves from points at
+// u1 and u2. Linear interpolation between the curves, returns
+// the points
+function interpolate_spirals(s1, u1, s2, u2, n = 10) {
+    const u1_i = (u1[1] - u1[0]) / n;
+    const u2_i = (u2[1] - u2[0]) / n;
+    const results = new Array(n + 1);
+    for (let i = 0; i <= n; i += 1) {
+        // let w2 = (i * i * i) / (n * n * n);
+        let w2 = fx(fx(fx(fx(i / n))));
+        const w = 1 - w2;
+        let p1 = s1.at(u1[0] + i * u1_i);
+        glMatrix.vec2.scale(p1, p1, w);
+        const p2 = s2.at(u2[0] + i * u2_i);
+        glMatrix.vec2.scale(p2, p2, w2);
+        glMatrix.vec2.add(p2, p2, p1);
+        results[i] = p2;
+    }
+    return results;
+}
+
+function ExpSpiral(r, x, y, n, ccw) {
+    this.r = r;
+    this.x = x;
+    this.y = y;
+    this.n = n; // no of rotations
+    this.obj = new Object2D();
+    this.obj.translate = [x, y];
+    this.ccw = ccw ? ccw : false;
+
+    this.at = function (u) {
+        point = this.at_local(u);
+
+        glMatrix.vec2.transformMat2d(point, point, this.obj.matrix);
+        return point;
+    }
+
+    this.at_local = function (u) {
+        const obj = this.parameters(u);
+        const point = [obj.scale * Math.cos(obj.theta), obj.scale * Math.sin(obj.theta)];
+        // clockwise rotation is just fliiping it around the x axis
+        // could also be done with the matrix by inverting one rotation
+        // axis
+        // Doing the opposite here because the -ve here becomes +ve in the
+        // viewport
+        if (this.ccw) {
+            point[1] = -point[1];
+        }
+        return point;
+    }
+
+    this.slope = function (u) {
+        const obj = this.parameters(u);
+        const result = [-obj.scale * Math.sin(obj.theta), obj.scale * Math.cos(obj.theta)];
+        if (this.ccw) {
+            point[0] = -point[0];
+            point[1] = -point[1];
+        }
+        return result;
+    }
+
+    this.parameters = function (u) {
+        const scale = Math.pow(this.r, u);
+        const theta = u * this.n * 2 * Math.PI;
+        return { scale, theta };
+    }
+
+    this.draw = function () {
+        const m = this.obj.matrix;
+        const subdivisions = 200;
+        applyMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
+        const points = new Array(subdivisions);
+        for (let i = 0; i < subdivisions; i++) {
+            points[i] = this.at_local((i + 1) / subdivisions);
+        }
+        stroke(0);
+        noFill();
+        beginShape();
+        for (let i = 0; i < points.length; i++) {
+            vertex(points[i][0], points[i][1]);
+        }
+        endShape();
+        resetMatrix();
+    }
+
+    // this.findPointWithVelocity = function (velocity) {
+    //     // let theta = 0;
+    //     let matrix = glMatrix.mat2d.create();
+    //     glMatrix.mat2d.invert(matrix, this.obj.matrix);
+    //     let vel = glMatrix.vec2.transformMat2(glMatrix.vec2.create(), velocity, matrix);
+    //     if (this.ccw) {
+    //         glMatrix.vec2.negate(vel, vel);
+    //     }
+    //     const a = this.a;
+    //     const b = this.b;
+    //     const sintheta = -vel[0] / a;
+    //     const costheta = vel[1] / b;
+    //     let vec = [costheta, sintheta];
+    //     // normalize so that it actually becomes valid sin and cos thetas
+    //     glMatrix.vec2.normalize(vec, vec);
+    //     const theta = Math.atan2(sintheta, costheta);
+    //     const u = this.uFromTheta(theta);
+
+    //     vec[0] = a * u * vec[0];
+    //     vec[1] = b * u * vec[1];
+    //     vel[0] = -a * u * vec[1] / b;
+    //     vel[1] = b * u * vec[0] / a;
+    //     if (this.ccw) {
+    //         glMatrix.vec2.negate(vel, vel);
+    //         // vec[1] = -vec[1];
+    //     }
+    //     vec = glMatrix.vec2.transformMat2d(vec, vec, this.obj.matrix);
+    //     vel = glMatrix.vec2.transformMat2(vel, vel, this.obj.matrix);
+    //     return { point: vec, velocity: vel };
+    // }
+
+}
+function Spiral(a, b, x, y, r, ccw) {
+    this.a = a;
+    this.b = b;
+    this.x = x;
+    this.y = y;
+    this.r = r; // no of rotations
+    this.obj = new Object2D();
+    this.obj.translate = [x, y];
+    this.ccw = ccw ? ccw : false;
+
+    this.at = function (u) {
+        point = at.call(this, u);
+
+        glMatrix.vec2.transformMat2d(point, point, this.obj.matrix);
+        return point;
+    }
+
+    this.velocityAtAngle = function (angle, rev) {
+
+        const u = this.uFromTheta(angle, rev);
+        const vel = [-a * u * Math.sin(angle), b * u * Math.cos(angle)];
+        if (this.ccw) {
+            glMatrix.vec2.negate(vel, vel);
+        }
+        return vel;
+    }
+
+    this.uFromTheta = function (theta, r) {
+        if (!r) {
+            r = this.r;
+        }
+        if (this.ccw) {
+            theta = (2 * Math.PI - theta) % (2 * Math.PI);
+        }
+        const u = ((r - 1) / this.r) + (theta / (2 * Math.PI)) / this.r;
+        return u;
+    }
+
+    function at(u) {
+        // point at u = acostheta, bsintheta
+        // theta = u * r * 2PI
+        const theta = u * r * 2 * Math.PI;
+        const point = [a * u * Math.cos(theta), b * u * Math.sin(theta)];
+        // clockwise rotation is just fliiping it around the x axis
+        // could also be done with the matrix by inverting one rotation
+        // axis
+        // Doing the opposite here because the -ve here becomes +ve in the
+        // viewport
+        if (this.ccw) {
+            point[1] = -point[1];
+        }
+        return point;
+    }
+
+    this.draw = function () {
+        const m = this.obj.matrix;
+        const subdivisions = 200;
+        applyMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
+        const points = new Array(subdivisions);
+        for (let i = 0; i < subdivisions; i++) {
+            points[i] = at.call(this, i / subdivisions);
+        }
+        stroke(0);
+        noFill();
+        beginShape();
+        for (let i = 0; i < points.length; i++) {
+            vertex(points[i][0], points[i][1]);
+        }
+        endShape();
+        resetMatrix();
+    }
+
+    this.findPointWithVelocity = function (velocity) {
+        // let theta = 0;
+        let matrix = glMatrix.mat2d.create();
+        glMatrix.mat2d.invert(matrix, this.obj.matrix);
+        let vel = glMatrix.vec2.transformMat2(glMatrix.vec2.create(), velocity, matrix);
+        if (this.ccw) {
+            glMatrix.vec2.negate(vel, vel);
+        }
+        const a = this.a;
+        const b = this.b;
+        const sintheta = -vel[0] / a;
+        const costheta = vel[1] / b;
+        let vec = [costheta, sintheta];
+        // normalize so that it actually becomes valid sin and cos thetas
+        glMatrix.vec2.normalize(vec, vec);
+        const theta = Math.atan2(sintheta, costheta);
+        const u = this.uFromTheta(theta);
+
+        vec[0] = a * u * vec[0];
+        vec[1] = b * u * vec[1];
+        vel[0] = -a * u * vec[1] / b;
+        vel[1] = b * u * vec[0] / a;
+        if (this.ccw) {
+            glMatrix.vec2.negate(vel, vel);
+            // vec[1] = -vec[1];
+        }
+        vec = glMatrix.vec2.transformMat2d(vec, vec, this.obj.matrix);
+        vel = glMatrix.vec2.transformMat2(vel, vel, this.obj.matrix);
+        return { point: vec, velocity: vel };
+    }
+
+    // function findVelocityAtAngle(ellipse, angle) {
+    //     let a = ellipse.a;
+    //     let b = ellipse.b;
+
+    //     let x = a * Math.cos(angle);
+    //     let y = b * Math.sin(angle);
+
+    //     let dx = -a * Math.sin(angle);
+    //     let dy = b * Math.cos(angle);
+    //     let vel = [dx, dy];
+    //     // glMatrix.vec2.normalize(vel, vel);
+    //     if (!ellipse.ccw) {
+    //         glMatrix.vec2.negate(vel, vel);
+    //     }
+    //     glMatrix.vec2.transformMat2(vel, vel, ellipse.obj.matrix);
+    //     return vel;
+    // }
+}
 function Ellipse(a, b, x, y, ccw) {
     this.a = a;
     this.b = b;
@@ -123,11 +401,11 @@ function Ellipse(a, b, x, y, ccw) {
     this.obj.translate = [x, y];
     this.ccw = ccw ? ccw : false;
 
-    this.draw = function() {
+    this.draw = function () {
         const m = this.obj.matrix;
         applyMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
         ellipse(0, 0, 2 * this.a, 2 * this.b);
-        resetMatrix();        
+        resetMatrix();
     }
 }
 
@@ -178,7 +456,7 @@ function findPointWithVelocity(ellipse, velocity) {
     }
     vec = glMatrix.vec2.transformMat2d(vec, vec, ellipse.obj.matrix);
     vel = glMatrix.vec2.transformMat2(vel, vel, ellipse.obj.matrix);
-    return {point: vec, velocity: vel};
+    return { point: vec, velocity: vel };
 }
 
 function findVelocityAtAngle(ellipse, angle) {
@@ -218,10 +496,10 @@ function hermite(p1, v1, p2, v2, n, mat) {
     if (!mat) {
         mat = hermite_matrix(p1, v1, p2, v2);
     }
-    let points = new Array(n+1);
-    for (let i=0; i <= n; i++) {
-        points[i] = hermite_at(p1, v1, p2, v2, i/n, mat);
-    }    
+    let points = new Array(n + 1);
+    for (let i = 0; i <= n; i++) {
+        points[i] = hermite_at(p1, v1, p2, v2, i / n, mat);
+    }
     return points;
 }
 // gets the point on a hermite curve from p1 to p2
@@ -230,9 +508,9 @@ function hermite_at(p1, v1, p2, v2, u, mat) {
     if (!mat) {
         mat = hermite_matrix(p1, v1, p2, v2);
     }
-    const vec = glMatrix.vec4.fromValues(1, u, u*u, u*u*u);
+    const vec = glMatrix.vec4.fromValues(1, u, u * u, u * u * u);
     glMatrix.vec4.transformMat4(vec, vec, mat);
-    const vel = glMatrix.vec4.fromValues(0, 1, 2*u, 3*u*u);
+    const vel = glMatrix.vec4.fromValues(0, 1, 2 * u, 3 * u * u);
     glMatrix.vec4.transformMat4(vel, vel, mat);
     // console.log("at u", u, vel);
     return vec;
@@ -241,7 +519,7 @@ function hermite_at(p1, v1, p2, v2, u, mat) {
 // with velocity v1 and v2
 function hermite_matrix(p1, v1, p2, v2) {
     // column major hermite matrix
-    const mat = glMatrix.mat4.fromValues(1, 0 ,0 ,0,
+    const mat = glMatrix.mat4.fromValues(1, 0, 0, 0,
         0, 0, 1, 0,
         -3, 3, -2, -1,
         2, -2, 1, 1);
