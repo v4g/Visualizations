@@ -1,23 +1,54 @@
-var spiral1, spiral2;
+var spiral1, spiral2, spiral3;
+const N_SPIRALS = 50;
+var spirals = new Array(N_SPIRALS);
+var frame = 0;
 function setup() {
     createCanvas(500, 500);
     // noLoop();
-    myscene_spiral()
+    myscene_spirals()
 }
 
 function draw() {
     background(220);
+    if (frame % 20 == 0) {
+        // background(220);
+    }
+    frame += 1;
     draw_myscene();
 }
-
 function draw_myscene() {
-    spiral2.obj.rotate = spiral2.obj.rotate + 0.01;
-    spiral1.obj.rotate = spiral1.obj.rotate + 0.01;
-    spiral1.draw();
-    spiral2.draw();
-    const p = interpolate_spirals(spiral1, [1, 1.1], spiral2, [1.1, 1], 100);
-    draw_curve(p);
+    for (let i = 0; i < spirals.length; i++) {
+        let spiral = spirals[i];
+        if (spiral.ccw) {
+            spiral.obj.rotate = spiral.obj.rotate - Math.PI / 200;
+        } else {
+            spiral.obj.rotate = spiral.obj.rotate - Math.PI / 200;
+        }
+    }
+    let spiral_u_max = new Array(spirals.length);//initialized with 0s
+    for (let i = 0; i < spiral_u_max.length; i++) {
+        spiral_u_max[i] = 0;
+    } 
+    for (let i = 0; i < spirals.length - 1; i++) {
+        u = connect_spirals(spirals[i], spirals[i + 1]);
+        spiral_u_max[i] = Math.max(u.u1, spiral_u_max[i]);
+        spiral_u_max[i + 1] = Math.max(u.u2, spiral_u_max[i + 1]);
+    }
+    for (let i = 0; i < spirals.length; i++) {
+        let spiral = spirals[i];
+        spiral.draw(spiral_u_max[i]);
+    }
 }
+
+// function draw_myscene() {
+//     spiral2.obj.rotate = spiral2.obj.rotate - Math.PI/200;
+//     spiral1.obj.rotate = spiral1.obj.rotate + Math.PI/200;
+//     u = connect_spirals(spiral1, spiral2);
+//     u2 = connect_spirals(spiral2, spiral3);
+//     spiral1.draw(u.u1);
+//     spiral2.draw(Math.max(u2.u1, u.u2));
+//     spiral3.draw(u2.u2);
+// }
 function myscene() {
     const ellipse1 = new Spiral(60, 50, 80, 80, 5, false);
     const ellipse2 = new Spiral(50, 40, 210, 80, 5, true);
@@ -31,9 +62,18 @@ function myscene() {
 }
 function myscene_spiral() {
     spiral1 = new ExpSpiral(60, 80, 80, 5, true);
-    spiral2 = new ExpSpiral(50, 210, 80, 5, true);
+    spiral2 = new ExpSpiral(50, 210, 80, 5, false);
+    spiral3 = new ExpSpiral(50, 210, 220, 5, true);
     spiral1.draw();
     spiral2.draw();
+}
+function myscene_spirals() {
+    for (let i = 0; i < N_SPIRALS; i++) {
+        let radius = Math.random() * 30 + 30;
+        let x = Math.random() * 450 + 25;
+        let y = Math.random() * 450 + 25;
+        spirals[i] = new ExpSpiral(radius, x, y, 5, i % 2 == 0)
+    }
 }
 
 function createCurveBetweenTwoEllipses(ellipse1, ellipse2, angle) {
@@ -65,7 +105,14 @@ function preprocess(ellipse, vel, point) {
     // the shorter the axis this is on, the more scaling needed
     const eccentricity = Math.max(ellipse.a, ellipse.b) / Math.min(ellipse.a, ellipse.b);
     const ext = 3 * Math.max(ellipse.a, ellipse.b) / dist;
-    console.log(ext);
+    vel[0] *= ext;
+    vel[1] *= ext;
+}
+
+function preprocessVel(spiral, vel) {
+    // I have no idea why this works.. Why 3??
+    // It just does
+    const ext = 1.5;
     vel[0] *= ext;
     vel[1] *= ext;
 }
@@ -84,13 +131,7 @@ function draw_curve(curve_points) {
 function createCurve(p1, v1, p2, v2) {
 
     curve_points = hermite(p1, v1, p2, v2, 200);
-    stroke(0);
-    noFill();
-    beginShape();
-    for (let i = 0; i < curve_points.length; i++) {
-        vertex(curve_points[i][0], curve_points[i][1]);
-    }
-    endShape();
+    draw_curve(curve_points);
     // curve(p1[0], p1[1], p3[0], p3[1], p2[0], p2[1], p4[0], p4[1]);
 }
 function Object2D() {
@@ -151,9 +192,9 @@ function Object2D() {
 }
 
 function fx(x) {
-    const res = (1 + Math.sin((-Math.PI / 2) + (x * Math.PI))) / 2; 
+    const res = (1 + Math.sin((-Math.PI / 2) + (x * Math.PI))) / 2;
     return res;
-} 
+}
 // interpolates the spiral curves from points at
 // u1 and u2. Linear interpolation between the curves, returns
 // the points
@@ -173,6 +214,21 @@ function interpolate_spirals(s1, u1, s2, u2, n = 10) {
         results[i] = p2;
     }
     return results;
+}
+
+function connect_spirals(s1, s2) {
+    // subtract centers to get velocity
+    // find the point on s1 with this velocity
+    // find the point on s2 with this velocity
+    // connect them using a curve
+    const vel = [s2.x - s1.x, s2.y - s1.y];
+    const u1 = s1.findPointWithVelocity(vel);
+    const u2 = s2.findPointWithVelocity(vel);
+    preprocessVel(s1, u1.velocity);
+    preprocessVel(s2, u2.velocity);
+    createCurve(u1.point, u1.velocity, u2.point, u2.velocity);
+    // interpolate_spirals(s1, [u1, u1 - 0.1], s2, [u2, u2 - 0.1]);
+    return { u1: u1.u, u2: u2.u };
 }
 
 function ExpSpiral(r, x, y, n, ccw) {
@@ -207,10 +263,12 @@ function ExpSpiral(r, x, y, n, ccw) {
 
     this.slope = function (u) {
         const obj = this.parameters(u);
-        const result = [-obj.scale * Math.sin(obj.theta), obj.scale * Math.cos(obj.theta)];
+        const result = [-obj.scale * Math.log(this.r) * Math.sin(obj.theta), obj.scale * Math.log(this.r) * Math.cos(obj.theta)];
+        result[0] = -result[0];
+        result[1] = -result[1];
         if (this.ccw) {
-            point[0] = -point[0];
-            point[1] = -point[1];
+            // result[0] = -result[0];
+            result[1] = -result[1];
         }
         return result;
     }
@@ -221,13 +279,16 @@ function ExpSpiral(r, x, y, n, ccw) {
         return { scale, theta };
     }
 
-    this.draw = function () {
+    this.draw = function (u) {
+        if (!u) {
+            u = 1;
+        }
         const m = this.obj.matrix;
-        const subdivisions = 200;
+        const subdivisions = 800;
         applyMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
         const points = new Array(subdivisions);
         for (let i = 0; i < subdivisions; i++) {
-            points[i] = this.at_local((i + 1) / subdivisions);
+            points[i] = this.at_local((i * u + 1) / subdivisions);
         }
         stroke(0);
         noFill();
@@ -239,36 +300,42 @@ function ExpSpiral(r, x, y, n, ccw) {
         resetMatrix();
     }
 
-    // this.findPointWithVelocity = function (velocity) {
-    //     // let theta = 0;
-    //     let matrix = glMatrix.mat2d.create();
-    //     glMatrix.mat2d.invert(matrix, this.obj.matrix);
-    //     let vel = glMatrix.vec2.transformMat2(glMatrix.vec2.create(), velocity, matrix);
-    //     if (this.ccw) {
-    //         glMatrix.vec2.negate(vel, vel);
-    //     }
-    //     const a = this.a;
-    //     const b = this.b;
-    //     const sintheta = -vel[0] / a;
-    //     const costheta = vel[1] / b;
-    //     let vec = [costheta, sintheta];
-    //     // normalize so that it actually becomes valid sin and cos thetas
-    //     glMatrix.vec2.normalize(vec, vec);
-    //     const theta = Math.atan2(sintheta, costheta);
-    //     const u = this.uFromTheta(theta);
+    this.uFromTheta = function (theta, r) {
+        if (!r) {
+            r = this.n;
+        }
+        // Because the velocity is in the opposite direction
+        // the theta should be subtracted from 2PI
+        if (this.ccw) {
+            theta = (2 * Math.PI - theta) % (2 * Math.PI);
+        }
+        const u = ((r - 1) / this.n) + (theta / (2 * Math.PI)) / this.n;
+        return u;
+    }
 
-    //     vec[0] = a * u * vec[0];
-    //     vec[1] = b * u * vec[1];
-    //     vel[0] = -a * u * vec[1] / b;
-    //     vel[1] = b * u * vec[0] / a;
-    //     if (this.ccw) {
-    //         glMatrix.vec2.negate(vel, vel);
-    //         // vec[1] = -vec[1];
-    //     }
-    //     vec = glMatrix.vec2.transformMat2d(vec, vec, this.obj.matrix);
-    //     vel = glMatrix.vec2.transformMat2(vel, vel, this.obj.matrix);
-    //     return { point: vec, velocity: vel };
-    // }
+    this.getUforVelocity = function (velocity) {
+        // let theta = 0;
+        let matrix = glMatrix.mat2d.create();
+        glMatrix.mat2d.invert(matrix, this.obj.matrix);
+        let vel = glMatrix.vec2.transformMat2(glMatrix.vec2.create(), velocity, matrix);
+        if (this.ccw) {
+            glMatrix.vec2.negate(vel, vel);
+        }
+        // normalize so that it actually becomes valid sin and cos thetas
+        glMatrix.vec2.normalize(vel, vel);
+        let theta = Math.atan2(-vel[0], vel[1]);
+        theta += Math.PI;
+        const u = this.uFromTheta(theta);
+        return u;
+    }
+
+    this.findPointWithVelocity = function (velocity) {
+        const u = this.getUforVelocity(velocity);
+        let vel = this.slope(u);
+        const pos = this.at(u);
+        vel = glMatrix.vec2.transformMat2(vel, vel, this.obj.matrix);
+        return { point: pos, velocity: vel, u };
+    }
 
 }
 function Spiral(a, b, x, y, r, ccw) {

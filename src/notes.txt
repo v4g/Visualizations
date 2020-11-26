@@ -7,3 +7,12 @@ How do you connect two ellipses?
 
 Change ellipses into spirals (parameter u - {0,1}, takes a,b from 0,0 to a,b, and theta, number of rotations = r 
                 theta = u * r * 2PI)
+
+Find the right point for the spirals to interpolate into. the right, the easiest path.
+I have a list of candidate u's that this can be sent to, how to choose the best one? The other ones would require very sharp acceleration
+Find the curve with the smallest possible acceleration. How do you find the right velocity and the right point to go to. Shortest path between which points
+The destinations are the two spirals. Every point on them is a destination
+The first point that is in between both the spirals is the point to start at, in the direction of the other guy, ditto for the opposite
+    -  the velocity will be in the direction (AB) a = spiral1, b = spiral2
+    - find the point with this velocity
+    - the other velocity will be the same, find the point with this velocity, connect them
