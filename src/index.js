@@ -28,7 +28,7 @@ function draw_myscene() {
     let spiral_u_max = new Array(spirals.length);//initialized with 0s
     for (let i = 0; i < spiral_u_max.length; i++) {
         spiral_u_max[i] = 0;
-    } 
+    }
     for (let i = 0; i < spirals.length - 1; i++) {
         u = connect_spirals(spirals[i], spirals[i + 1]);
         spiral_u_max[i] = Math.max(u.u1, spiral_u_max[i]);
@@ -68,14 +68,32 @@ function myscene_spiral() {
     spiral2.draw();
 }
 function myscene_spirals() {
-    for (let i = 0; i < N_SPIRALS; i++) {
-        let radius = Math.random() * 30 + 30;
-        let x = Math.random() * 450 + 25;
-        let y = Math.random() * 450 + 25;
-        spirals[i] = new ExpSpiral(radius, x, y, 5, i % 2 == 0)
+    spirals = arrange_grid(50, 500, 500);
+}
+function arrange_grid(radius, width, height, spacing = 0, number_of_rotations = 5) {
+    const overflow_width = (width % radius) / 2;
+    const overflow_height = (width % radius) / 2;
+    const spirals_per_row = Math.floor(width / (2 * radius + spacing));
+    const spirals_per_col = Math.floor(height / (2 * radius + spacing));
+    let spirals = new Array(spirals_per_row * spirals_per_col);
+    for (let i = 0; i < spirals_per_row; i += 1) {
+        for (let j = 0; j < spirals_per_col; j += 1) {
+            // snake pattern
+            let x = (overflow_width + radius) + i * 2 * radius + spacing;
+            x = j % 2 == 0 ? x : width - x;
+            let y = (overflow_height + radius) + j * 2 * radius;
+            spirals[j * spirals_per_row + i] = new ExpSpiral(radius, x, y, number_of_rotations, i % 2 == 0)
+        }
     }
+    return spirals;
 }
 
+function arranger(n_spirals, algorithm) {
+
+    function arrange() {
+
+    }
+}
 function createCurveBetweenTwoEllipses(ellipse1, ellipse2, angle) {
     const vel = findVelocityAtAngle(ellipse1, angle);
     const normalized_vel = glMatrix.vec2.create();
@@ -440,24 +458,6 @@ function Spiral(a, b, x, y, r, ccw) {
         vel = glMatrix.vec2.transformMat2(vel, vel, this.obj.matrix);
         return { point: vec, velocity: vel };
     }
-
-    // function findVelocityAtAngle(ellipse, angle) {
-    //     let a = ellipse.a;
-    //     let b = ellipse.b;
-
-    //     let x = a * Math.cos(angle);
-    //     let y = b * Math.sin(angle);
-
-    //     let dx = -a * Math.sin(angle);
-    //     let dy = b * Math.cos(angle);
-    //     let vel = [dx, dy];
-    //     // glMatrix.vec2.normalize(vel, vel);
-    //     if (!ellipse.ccw) {
-    //         glMatrix.vec2.negate(vel, vel);
-    //     }
-    //     glMatrix.vec2.transformMat2(vel, vel, ellipse.obj.matrix);
-    //     return vel;
-    // }
 }
 function Ellipse(a, b, x, y, ccw) {
     this.a = a;
@@ -475,27 +475,6 @@ function Ellipse(a, b, x, y, ccw) {
         resetMatrix();
     }
 }
-
-// // select a random point on the ellipse and draw another circle
-// // of random radius some distance away
-// function drawing1() {
-//     var ellipse1 = two.makeEllipse(0, 0, 50);
-//     var ellipse2 = two.makeEllipse(250, 50, 50);
-//     ellipse1.ccw = true;
-//     ellipse2.ccw = false;
-//     ellipse1.translation.set(50, 50);
-//     console.log(ellipse1);
-//     const angle = Math.PI / 2;
-//     const p1 = pointOnEllipse(ellipse1, angle);
-//     const v1 = findVelocityAtAngle(ellipse1, angle);
-//     const p2 = findPointWithVelocity(ellipse2, v1);
-//     console.log(v1);
-//     v1.multiplyScalar(25);
-//     const v2 = v1.clone();
-//     v2.multiplyScalar(-1);
-//     createCurve(p1, v1, p2, v2);
-
-// }
 
 // find a point on the ellipse with a certain velocity direction
 // tan theta = a / b * (vel.y/vel.x)

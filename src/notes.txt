@@ -16,3 +16,18 @@ The first point that is in between both the spirals is the point to start at, in
     -  the velocity will be in the direction (AB) a = spiral1, b = spiral2
     - find the point with this velocity
     - the other velocity will be the same, find the point with this velocity, connect them
+    - DONE
+
+Arrange the spirals 
+    - Select two spirals to connect, close to each other such that the connection does not intersect other spirals
+    - Intersection test of the curve with other spirals will be expensive
+    - Place the spirals some distance away from each other
+
+    - Partition the space into squares, then connect neighbors
+
+    - Lay them out in a grid
+
+An hourglass that turns at the turn of a button (Patent)
+
+STATIC SPIRALS - 
+    The connection goes into one spiral and comes out of a rotated version of the spiral connecting to a third one. Every spiral rotation has only one connection
