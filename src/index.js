@@ -1,6 +1,5 @@
 var spiral1, spiral2, spiral3;
-const N_SPIRALS = 50;
-var spirals = new Array(N_SPIRALS);
+var spirals;
 var frame = 0;
 function setup() {
     createCanvas(500, 500);
@@ -17,6 +16,7 @@ function draw() {
     draw_myscene();
 }
 function draw_myscene() {
+    myscene_spirals();
     for (let i = 0; i < spirals.length; i++) {
         let spiral = spirals[i];
         if (spiral.ccw) {
@@ -27,13 +27,13 @@ function draw_myscene() {
     }
     let spiral_u_max = new Array(spirals.length);//initialized with 0s
     for (let i = 0; i < spiral_u_max.length; i++) {
-        spiral_u_max[i] = 0;
+        spiral_u_max[i] = 1;
     }
-    for (let i = 0; i < spirals.length - 1; i++) {
-        u = connect_spirals(spirals[i], spirals[i + 1]);
-        spiral_u_max[i] = Math.max(u.u1, spiral_u_max[i]);
-        spiral_u_max[i + 1] = Math.max(u.u2, spiral_u_max[i + 1]);
-    }
+    // for (let i = 0; i < spirals.length - 1; i++) {
+    //     u = connect_spirals(spirals[i], spirals[i + 1]);
+    //     spiral_u_max[i] = Math.max(u.u1, spiral_u_max[i]);
+    //     spiral_u_max[i + 1] = Math.max(u.u2, spiral_u_max[i + 1]);
+    // }
     for (let i = 0; i < spirals.length; i++) {
         let spiral = spirals[i];
         spiral.draw(spiral_u_max[i]);
@@ -68,7 +68,8 @@ function myscene_spiral() {
     spiral2.draw();
 }
 function myscene_spirals() {
-    spirals = arrange_grid(50, 500, 500);
+    // spirals = arrange_grid(50, 500, 500);
+    spirals = arrange_inspirals(50, 250, 250, 5);
 }
 function arrange_grid(radius, width, height, spacing = 0, number_of_rotations = 5) {
     const overflow_width = (width % radius) / 2;
@@ -85,6 +86,38 @@ function arrange_grid(radius, width, height, spacing = 0, number_of_rotations = 
             spirals[j * spirals_per_row + i] = new ExpSpiral(radius, x, y, number_of_rotations, i % 2 == 0)
         }
     }
+    return spirals;
+}
+// One main spiral, with many spirals inside it
+// Could be recursive. The spirals sit inside the long arm of a spiral
+function arrange_inspirals(radius, x, y, n) {
+    // one main spiral
+    const spirals = new Array(2);
+    const big_spiral = new ExpSpiral(radius, x, y, n);
+
+    // find the radius of the other spirals they should be between two arms of the spiral
+    // same theta, different u's
+    let u1 = big_spiral.at((big_spiral.n - 2) / big_spiral.n);
+    let u2 = big_spiral.at((big_spiral.n - 1) / big_spiral.n);
+    let vec = glMatrix.vec2.create();
+    glMatrix.vec2.sub(vec, u2, u1);
+    let diameter = glMatrix.vec2.len(vec);
+    console.log(diameter);
+    // ratio of r at upper point to r at lower point
+    let ratio = big_spiral.parameters((2 * big_spiral.n - 1) / (2 * big_spiral.n)).scale / big_spiral.parameters(1).scale;
+    diameter = diameter * (ratio / (ratio + 1));
+    ratio = ratio / (ratio + 1);
+    let center = glMatrix.vec2.create();
+    glMatrix.vec2.scaleAndAdd(center, u1, vec, ratio);
+
+    // diameter = ratio * diameter;
+    // this could be way faster if when calculating the point by a spiral
+    // we specify the scale as (n-1)/n + 1/2n and stay with the same angle
+    // glMatrix.vec2.scale(vec, vec, ratio);
+    // glMatrix.vec2.add(center, u1, vec);
+    const small_spiral = new ExpSpiral(diameter, center[0], center[1], n);
+    spirals[0] = big_spiral;
+    spirals[1] = small_spiral;
     return spirals;
 }
 
@@ -265,9 +298,8 @@ function ExpSpiral(r, x, y, n, ccw) {
         return point;
     }
 
-    this.at_local = function (u) {
-        const obj = this.parameters(u);
-        const point = [obj.scale * Math.cos(obj.theta), obj.scale * Math.sin(obj.theta)];
+    this.morphLocal = function (scale, theta) {
+        const point = [scale * Math.cos(theta), scale * Math.sin(theta)];
         // clockwise rotation is just fliiping it around the x axis
         // could also be done with the matrix by inverting one rotation
         // axis
@@ -277,11 +309,36 @@ function ExpSpiral(r, x, y, n, ccw) {
             point[1] = -point[1];
         }
         return point;
+
     }
 
+    this.morph = function (scale, theta) {
+        const point = [scale * Math.cos(theta), scale * Math.sin(theta)];
+        // clockwise rotation is just fliiping it around the x axis
+        // could also be done with the matrix by inverting one rotation
+        // axis
+        // Doing the opposite here because the -ve here becomes +ve in the
+        // viewport
+        if (this.ccw) {
+            point[1] = -point[1];
+        }
+        glMatrix.vec2.transformMat2d(point, point, this.obj.matrix);
+        return point;
+
+    }
+
+    this.at_local = function (u) {
+        const obj = this.parameters(u);
+        return this.morphLocal(obj.scale, obj.theta);
+    }
+    this.get_upair = function (u) {
+        return u + 1 / this.n;
+    }
     this.slope = function (u) {
         const obj = this.parameters(u);
-        const result = [-obj.scale * Math.log(this.r) * Math.sin(obj.theta), obj.scale * Math.log(this.r) * Math.cos(obj.theta)];
+        const result_x = u * obj.scale * Math.cos(obj.theta) - obj.scale * Math.sin(obj.theta);
+        const result_y = u * obj.scale * Math.sin(obj.theta) + obj.scale * Math.cos(obj.theta);
+        const result = [result_x, result_y];
         result[0] = -result[0];
         result[1] = -result[1];
         if (this.ccw) {
@@ -291,8 +348,12 @@ function ExpSpiral(r, x, y, n, ccw) {
         return result;
     }
 
+    // u between 0 and 1
+    // at u = 0, the point should be nearly 0
+    // at u = 1, the point should be the radius
     this.parameters = function (u) {
-        const scale = Math.pow(this.r, u);
+        const mapped_u = (u - 0.9) * 10
+        const scale = this.r * Math.exp(mapped_u);
         const theta = u * this.n * 2 * Math.PI;
         return { scale, theta };
     }
@@ -305,8 +366,9 @@ function ExpSpiral(r, x, y, n, ccw) {
         const subdivisions = 800;
         applyMatrix(m[0], m[1], m[2], m[3], m[4], m[5]);
         const points = new Array(subdivisions);
+        const center = subdivisions / 2;
         for (let i = 0; i < subdivisions; i++) {
-            points[i] = this.at_local((i * u + 1) / subdivisions);
+            points[i] = this.at_local((i * u) / subdivisions);
         }
         stroke(0);
         noFill();
