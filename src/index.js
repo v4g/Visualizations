@@ -1,10 +1,12 @@
 var spiral1, spiral2, spiral3;
 var spirals;
 var frame = 0;
+var big_spirals_rotation = 0;
 function setup() {
     createCanvas(500, 500);
     // noLoop();
     myscene_spirals()
+    formula_verification();
 }
 
 function draw() {
@@ -17,14 +19,15 @@ function draw() {
 }
 function draw_myscene() {
     myscene_spirals();
-    for (let i = 0; i < spirals.length; i++) {
-        let spiral = spirals[i];
-        if (spiral.ccw) {
-            spiral.obj.rotate = spiral.obj.rotate - Math.PI / 200;
-        } else {
-            spiral.obj.rotate = spiral.obj.rotate - Math.PI / 200;
-        }
-    }
+    spirals[0].obj.rotate = big_spirals_rotation;
+    // for (let i = 0; i < spirals.length; i++) {
+    //     let spiral = spirals[i];
+    //     if (spiral.ccw) {
+    //         spiral.obj.rotate = spiral.obj.rotate - Math.PI / 200;
+    //     } else {
+    //         spiral.obj.rotate = spiral.obj.rotate - Math.PI / 200;
+    //     }
+    // }
     let spiral_u_max = new Array(spirals.length);//initialized with 0s
     for (let i = 0; i < spiral_u_max.length; i++) {
         spiral_u_max[i] = 1;
@@ -92,17 +95,69 @@ function arrange_grid(radius, width, height, spacing = 0, number_of_rotations = 
 // Could be recursive. The spirals sit inside the long arm of a spiral
 function arrange_inspirals(radius, x, y, n) {
     // one main spiral
-    const spirals = new Array(2);
+    let count = 5;
+    const spirals = new Array(count + 1);
     const big_spiral = new ExpSpiral(radius, x, y, n);
+    // big_spirals_rotation -= Math.PI / 200;
+    big_spiral.obj.rotate = big_spirals_rotation;
+    let starting_u = (big_spiral.n - 2) / big_spiral.n;
+    // let increment_u = ((big_spiral.n - 1) / big_spiral.n - (big_spiral.n - 2) / big_spiral.n) / count;
+    spirals[0] = big_spiral;
+    let increment_u = get_u_increment(starting_u, big_spiral.n - 1, big_spiral, big_spirals_rotation);
+    console.log(increment_u);
+    for (let i = 0; i < count; i++) {
+        let u = starting_u + i * increment_u;
+        const small_spiral = get_spiral_in_spiral(big_spiral, u, big_spirals_rotation);
+        spirals[i + 1] = small_spiral;
+        // console.log(get_angle_on_spiral(small_spiral, big_spiral));
+    }
+    return spirals;
+
+    function get_u_increment(u, r, big_spiral, big_spirals_rotation) {
+        const small_spiral = get_spiral_in_spiral(big_spiral, u, big_spirals_rotation);
+        const theta = get_angle_on_spiral(small_spiral, big_spiral);
+
+        // get next u incremented by theta
+        const current_angle = big_spiral.parameters(u).theta % (2 * Math.PI);
+        const new_angle = current_angle + theta;
+        const new_u = big_spiral.uFromTheta(new_angle, r);
+        return new_u - u;
+    }
+    // returns the angle subtended by the end points of this spiral
+    // on the big spiral
+    function get_angle_on_spiral(small_spiral, big_spiral) {
+        // find the end points of this small spiral
+        const u_base = (small_spiral.n - 1) / small_spiral.n;
+        const u_increment = 1 / small_spiral.n;
+        let ul = u_base + u_increment / 4;
+        let ur = u_base + 3 * u_increment / 4;
+
+        let at_ul = small_spiral.at(ul);
+        let at_ur = small_spiral.at(ur);
+
+        let v_ul = [at_ul[0] - big_spiral.x, at_ul[1] - big_spiral.y];
+        let v_ur = [at_ur[0] - big_spiral.x, at_ur[1] - big_spiral.y];
+
+        glMatrix.vec2.normalize(v_ul, v_ul);
+        glMatrix.vec2.normalize(v_ur, v_ur);
+
+        const dot = glMatrix.vec2.dot(v_ul, v_ur);
+        const theta = Math.acos(dot);
+
+        return theta;
+    }
+}
+function get_spiral_in_spiral(big_spiral, starting_u, rotation) {
 
     // find the radius of the other spirals they should be between two arms of the spiral
     // same theta, different u's
-    let u1 = big_spiral.at((big_spiral.n - 2) / big_spiral.n);
-    let u2 = big_spiral.at((big_spiral.n - 1) / big_spiral.n);
+    let u_increment = 1 / big_spiral.n;
+    let u1 = big_spiral.at(starting_u);
+    let u2 = big_spiral.at(starting_u + u_increment);
     let vec = glMatrix.vec2.create();
     glMatrix.vec2.sub(vec, u2, u1);
     let diameter = glMatrix.vec2.len(vec);
-    console.log(diameter);
+
     // ratio of r at upper point to r at lower point
     let ratio = big_spiral.parameters((2 * big_spiral.n - 1) / (2 * big_spiral.n)).scale / big_spiral.parameters(1).scale;
     diameter = diameter * (ratio / (ratio + 1));
@@ -110,15 +165,11 @@ function arrange_inspirals(radius, x, y, n) {
     let center = glMatrix.vec2.create();
     glMatrix.vec2.scaleAndAdd(center, u1, vec, ratio);
 
-    // diameter = ratio * diameter;
-    // this could be way faster if when calculating the point by a spiral
-    // we specify the scale as (n-1)/n + 1/2n and stay with the same angle
-    // glMatrix.vec2.scale(vec, vec, ratio);
-    // glMatrix.vec2.add(center, u1, vec);
-    const small_spiral = new ExpSpiral(diameter, center[0], center[1], n);
-    spirals[0] = big_spiral;
-    spirals[1] = small_spiral;
-    return spirals;
+    const local_rotation = big_spiral.parameters(starting_u).theta;
+    const small_spiral = new ExpSpiral(diameter, center[0], center[1], big_spiral.n);
+    small_spiral.obj.rotate = local_rotation + rotation;
+    return small_spiral;
+
 }
 
 function arranger(n_spirals, algorithm) {
@@ -280,6 +331,31 @@ function connect_spirals(s1, s2) {
     createCurve(u1.point, u1.velocity, u2.point, u2.velocity);
     // interpolate_spirals(s1, [u1, u1 - 0.1], s2, [u2, u2 - 0.1]);
     return { u1: u1.u, u2: u2.u };
+}
+
+// verify the formula for getting the projection of the spiral
+// on the line connecting to another point
+function formula_verification() {
+    const center = [250, 250];
+    const TWOPI = 2 * Math.PI;
+    const PI = Math.PI;
+    const spiral_center = [450, 250];
+    const z = glMatrix.vec2.length(glMatrix.vec2.sub(center, spiral_center, center));
+    const n = 5; // no of rotations
+    const r = 50;
+    const MULT = 10;
+    const X = (n - 1) / n;
+    for (let theta = 0; theta < PI / 2; theta += (PI / 20)) {
+        const f_theta = MULT * (X + (theta / TWOPI) / n) - (MULT - 1);
+
+        const numerator = r * Math.exp(f_theta) * Math.cos(theta);
+        const denominator = z - (r * Math.exp(f_theta) * Math.sin(theta));
+
+        const projection = numerator / denominator;
+        console.log("F(theta) ", f_theta);
+        console.log("Numerator, denominator ", numerator, denominator);
+        console.log("Projection for ", theta + " is " + projection);
+    }
 }
 
 function ExpSpiral(r, x, y, n, ccw) {
